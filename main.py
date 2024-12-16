@@ -2,7 +2,8 @@ import os
 import sys
 import click
 import pandas as pd
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
+import plotext as plt
 
 from InquirerPy import inquirer
 from rich.pretty import pprint
@@ -36,13 +37,17 @@ def get_column_name(df):
     return choice
 
 def get_dataset_path():
+    for index, ds_path in enumerate(DATASET_PATHS):
+        click.echo(f"{index}: {ds_path}")
+
     ds_index = click.prompt("Enter the index of the dataset you want to process: ", type=int, default=0)
 
     DATASET_PATH = DATASET_PATHS[ds_index]
 
-    return pd.read_parquet(DATASET_PATH)
+    return DATASET_PATH
 
-def get_experiment_name(experiment_names):
+def get_experiment_name(df):
+    experiment_names = df['experiment_name'].unique()
     choice = inquirer.fuzzy(
         message="Select an experiment name",
         choices=experiment_names
@@ -51,46 +56,87 @@ def get_experiment_name(experiment_names):
     return choice
 
 def main():
-    for index, ds_path in enumerate(DATASET_PATHS):
-        click.echo(f"{index}: {ds_path}")
-
-    df = get_dataset_path()
-
-    experiment_names = df['experiment_name'].unique()
-    experiment_name = get_experiment_name(experiment_names)
+    DEBUG_MODE = '--debug' in sys.argv
     
+    if DEBUG_MODE:
+        ds_path = DATASET_PATHS[0]
+    else:
+        ds_path = get_dataset_path()
+
+    df = pd.read_parquet(ds_path)
+    ds_name = "{} {}".format(
+        os.path.basename(os.path.dirname(ds_path)),
+        os.path.basename(ds_path).replace(".parquet", ""),
+    )
+
+    if DEBUG_MODE:
+        experiment_name = "600SEC_1000B_1PUB_20SUB_REL_MC_0DUR_100LC"
+    else:
+        experiment_name = get_experiment_name(df)
+
     df = df[df['experiment_name'] == experiment_name]
 
-    col_name = get_column_name(df)
+    if DEBUG_MODE:
+        col_name = "avg_mbps"
+        # col_name = "latency_us"
+    else:
+        col_name = get_column_name(df)
 
-    df = df[col_name]
+    df = df[col_name].dropna()
     
-    click.echo(f"Experiment Name: {experiment_name}")
-    click.echo(f"Column Name: {col_name}")
-
-    console.print(f"Number of rows: {df.shape[0]}")
+    row_count = df.shape[0]
     
-    # Print how many nan values there are
-    console.print(f"Number of NaN values: {df.isna().sum()}")
+    plt.subplots(2, 1)
+    plt.subplot(1, 1)
+    plt.plot_size(100, 20)
+    plt.plot(
+        df,
+        label=[         
+            f"Mean: {int(df.mean())}",
+            f"Median: {int(df.median())}",
+            f"Min: {int(df.min())}",
+            f"Max: {int(df.max())}",
+        ]
+    )
+    plt.title(
+        "{} - {} - {} ({} samples)".format(
+            ds_name,
+            experiment_name,
+            col_name,
+            row_count
+        )
+    )
+    plt.xlabel("Increasing Time")
+    plt.ylabel(col_name)
+    plt.yscale("log")
 
-    # df = df.dropna(inplace=True)
+    # Cut first 20% of the data
+    df = df[int(row_count * 0.2):]
+    row_count = df.shape[0]
+    
+    plt.subplot(2, 1)
+    plt.plot(
+        df,
+        label=[         
+            f"Mean: {int(df.mean())}",
+            f"Median: {int(df.median())}",
+            f"Min: {int(df.min())}",
+            f"Max: {int(df.max())}",
+        ]
+    )
+    plt.title(
+        "{} - {} - {} ({} samples)".format(
+            ds_name,
+            experiment_name,
+            col_name,
+            row_count
+        )
+    )
+    plt.xlabel("Increasing Time")
+    plt.ylabel(col_name)
+    plt.yscale("log")
 
-    pprint(df.describe())
-    pprint(df.head())
-    pprint(df.tail())
-
-    fig, ax = plt.subplots()
-    ax.plot(df)
-    ax.set_title(f"{experiment_name} - {col_name}")
-    ax.set_xlabel("Increasing Time")
-    ax.set_ylabel(col_name)
-
-    # ax.set_yscale("log")
-
-    os.makedirs("plots", exist_ok=True)
-    plt.savefig(f"plots/{experiment_name}_{col_name}.png")
-    console.print(f"Plot saved to plots/{experiment_name}_{col_name}.png")
-    plt.close()
+    plt.show()
 
 if __name__ == "__main__":
     main()
