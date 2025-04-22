@@ -2,8 +2,8 @@ import os
 import sys
 import click
 import pandas as pd
-# import matplotlib.pyplot as plt
-import plotext as plt
+import matplotlib.pyplot as plt
+import plotext as pltx
 
 from InquirerPy import inquirer
 from rich.pretty import pprint
@@ -41,7 +41,6 @@ def get_dataset_path():
         click.echo(f"{index}: {ds_path}")
 
     ds_index = click.prompt("Enter the index of the dataset you want to process: ", type=int, default=0)
-
     DATASET_PATH = DATASET_PATHS[ds_index]
 
     return DATASET_PATH
@@ -70,36 +69,72 @@ def main():
     )
 
     if DEBUG_MODE:
-        experiment_name = "600SEC_1000B_1PUB_20SUB_REL_MC_0DUR_100LC"
+        # experiment_name = "600SEC_1000B_10PUB_5SUB_BE_MC_3DUR_100LC"
+        experiment_name = "600SEC_512B_1PUB_1SUB_BE_UC_0DUR_100LC"
     else:
         experiment_name = get_experiment_name(df)
 
     df = df[df['experiment_name'] == experiment_name]
 
     if DEBUG_MODE:
-        col_name = "avg_mbps"
-        # col_name = "latency_us"
+        # col_name = "avg_mbps"
+        col_name = "latency_us"
     else:
         col_name = get_column_name(df)
 
     df = df[col_name].dropna()
+    df = df.reset_index(drop=True)
     
     row_count = df.shape[0]
     
-    plt.subplots(2, 1)
-    plt.subplot(1, 1)
-    plt.plot_size(100, 20)
-    plt.plot(
+    pltx.plot_size(100, 20)
+    pltx.plot(
         df,
         label=[         
-            f"Mean: {int(df.mean())}",
-            f"Median: {int(df.median())}",
-            f"Min: {int(df.min())}",
-            f"Max: {int(df.max())}",
+            "Red: 10%",
+            "Blue: 20%",
+            "Green: 30%",
+            "Yellow: 40%",
         ]
     )
-    plt.title(
+
+    ten_percent = int(row_count * 0.1)
+    twenty_percent = int(row_count * 0.2)
+    thirty_percent = int(row_count * 0.3)
+    forty_percent = int(row_count * 0.4)
+
+    colors = [
+        'red',
+        'blue',
+        'green',
+        'yellow',
+    ]
+
+    v_line_percentages = [
+        ten_percent,
+        twenty_percent,
+        thirty_percent,
+        forty_percent,
+    ]
+
+    for index, v_line_percentage in enumerate(v_line_percentages):
+        pltx.vline(v_line_percentage, color=colors[index])
+
+    pltx.title(
         "{} - {} - {} ({} samples)".format(
+            ds_name,
+            experiment_name,
+            col_name,
+            row_count
+        )
+    )
+    pltx.xlabel("Increasing Time")
+    pltx.ylabel(col_name)
+    pltx.yscale("log")
+    
+    plt.plot(df)
+    plt.title(
+        "{}\n{}\n{}\n({} samples)".format(
             ds_name,
             experiment_name,
             col_name,
@@ -108,35 +143,15 @@ def main():
     )
     plt.xlabel("Increasing Time")
     plt.ylabel(col_name)
-    plt.yscale("log")
+    # plt.yscale("log")
+    plt.tight_layout()
 
-    # Cut first 20% of the data
-    df = df[int(row_count * 0.2):]
-    row_count = df.shape[0]
-    
-    plt.subplot(2, 1)
-    plt.plot(
-        df,
-        label=[         
-            f"Mean: {int(df.mean())}",
-            f"Median: {int(df.median())}",
-            f"Min: {int(df.min())}",
-            f"Max: {int(df.max())}",
-        ]
-    )
-    plt.title(
-        "{} - {} - {} ({} samples)".format(
-            ds_name,
-            experiment_name,
-            col_name,
-            row_count
-        )
-    )
-    plt.xlabel("Increasing Time")
-    plt.ylabel(col_name)
-    plt.yscale("log")
-
-    plt.show()
+    try:
+        pltx.show()
+    except Exception as e:
+        console.print(e, style="bold red")
+        plt.savefig(f"plots/{ds_name}_{experiment_name}_{col_name}.png")
+        console.print(f"Plot saved as plots/{ds_name}_{experiment_name}_{col_name}.png", style="bold green")
 
 if __name__ == "__main__":
     main()
